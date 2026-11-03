@@ -1,4 +1,3 @@
-import { useGrowthBook } from "@growthbook/growthbook-react";
 import { useMemo, useRef, useState } from "react";
 import { Box, Flex } from "@radix-ui/themes";
 import { PiArrowClockwise, PiArrowLeft } from "react-icons/pi";
@@ -159,7 +158,6 @@ export const ExperimentAssignmentQueryModal = ({
   const { projects: allProjects } = useDefinitions();
   const permissionsUtil = usePermissionsUtil();
   const { apiCall } = useAuth();
-  const growthbook = useGrowthBook();
 
   const savedRoleColumns = exposureQuery ? getRoleColumns(exposureQuery) : {};
   const savedUserIdTypes = exposureQuery
@@ -263,8 +261,7 @@ export const ExperimentAssignmentQueryModal = ({
     datasource: dataSource,
     // A saved query keeps only its SQL, so edits stay in SQL mode. An unsaved
     // draft hasn't been stored as SQL yet, so it can still switch to a table.
-    tableModeAvailable:
-      (!exposureQuery || unsaved) && growthbook.isOn("fact-table-table-mode"),
+    tableModeAvailable: !exposureQuery || unsaved,
     templates,
     queryType: "exposureQueryTest",
     sql,
