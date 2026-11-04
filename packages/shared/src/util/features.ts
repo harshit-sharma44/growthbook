@@ -2162,7 +2162,7 @@ export function filterProjectsByEnvironmentWithNull(
 }
 
 export function featureHasEnvironment(
-  feature: FeatureInterface,
+  feature: Pick<FeatureInterface, "project">,
   environment: Environment,
 ): boolean {
   const featureProjects = feature.project ? [feature.project] : [];
@@ -2200,7 +2200,7 @@ export function experimentHasEnvironment(
 
 export function filterEnvironmentsByFeature(
   environments: Environment[],
-  feature: FeatureInterface,
+  feature: Pick<FeatureInterface, "project">,
 ): Environment[] {
   return environments.filter((env) => featureHasEnvironment(feature, env));
 }
