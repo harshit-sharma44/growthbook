@@ -4,8 +4,12 @@ import {
   FeatureInterface,
   FeatureValueType,
 } from "shared/types/feature";
-import React, { ReactElement } from "react";
-import { validateFeatureValue } from "shared/util";
+import React, { ReactElement, useMemo } from "react";
+import {
+  featureHasEnvironment,
+  filterEnvironmentsByFeature,
+  validateFeatureValue,
+} from "shared/util";
 import { PiInfo } from "react-icons/pi";
 import { Box } from "@radix-ui/themes";
 import { HoldoutSelect } from "@/components/Holdout/HoldoutSelect";
@@ -191,6 +195,13 @@ export default function FeatureModal({
   const canCreateWithoutProject =
     !requireProjectForFeatures && permissionsUtil.canViewFeatureModal();
   const selectedProject = form.watch("project");
+  // Only show environments that apply to the selected project. Environments
+  // scoped to other projects are excluded, matching the feature page.
+  const projectEnvironments = useMemo(
+    () =>
+      filterEnvironmentsByFeature(environments, { project: selectedProject }),
+    [environments, selectedProject],
+  );
   const customFields = filterCustomFieldsForSectionAndProject(
     allCustomFields,
     "feature",
@@ -267,8 +278,24 @@ export default function FeatureModal({
           );
         }
 
+        // Environments that don't apply to the selected project are hidden
+        // from the form, so make sure they are not submitted as enabled.
+        const projectEnvironmentSettings: Record<string, FeatureEnvironment> =
+          {};
+        Object.entries(feature.environmentSettings || {}).forEach(
+          ([envId, settings]) => {
+            const env = environments.find((e) => e.id === envId);
+            const applies =
+              !env || featureHasEnvironment({ project: feature.project }, env);
+            projectEnvironmentSettings[envId] = applies
+              ? settings
+              : { ...settings, enabled: false };
+          },
+        );
+
         const body = {
           ...feature,
+          environmentSettings: projectEnvironmentSettings,
           defaultValue: parseDefaultValue(defaultValue, valueType),
           holdout: {
             id: holdout?.id ?? "",
@@ -386,7 +413,7 @@ export default function FeatureModal({
 
         <EnvironmentSelect
           environmentSettings={environmentSettings}
-          environments={environments}
+          environments={projectEnvironments}
           project={selectedProject}
           setValue={(env, on) => {
             environmentSettings[env.id].enabled = on;
