@@ -11,7 +11,7 @@ import {
 } from "react";
 import { FaSort, FaSortDown, FaSortUp } from "react-icons/fa";
 import { useRouter } from "next/router";
-import MiniSearch from "minisearch";
+import MiniSearch, { Query } from "minisearch";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import Pagination from "@/components/Pagination";
 import { TableColumnHeader } from "@/ui/Table";
@@ -156,6 +156,22 @@ export interface SearchReturn<T> {
   pagination: ReactNode;
 }
 
+// MiniSearch tokenizes on whitespace AND punctuation and ORs every term, so
+// "foo_bar" used to be searched as "foo" OR "bar" and matched an unrelated
+// item named just "foo". Keep OR between whitespace-separated words, but
+// require all the parts of a punctuation-joined word ("foo_bar", "checkout-v2",
+// "app.flag") to match. Words without punctuation are searched exactly as before.
+const WHITESPACE = /[\n\r\p{Z}]+/u;
+export function buildSearchQuery(searchTerm: string): Query {
+  return {
+    combineWith: "OR",
+    queries: searchTerm
+      .split(WHITESPACE)
+      .filter(Boolean)
+      .map((word): Query => ({ combineWith: "AND", queries: [word] })),
+  };
+}
+
 export function useSearch<T extends { id: string }>({
   items,
   searchFields,
@@ -246,7 +262,7 @@ export function useSearch<T extends { id: string }>({
 
     let filtered = items;
     if (searchTerm.length > 0) {
-      const searchResults = miniSearch.search(searchTerm);
+      const searchResults = miniSearch.search(buildSearchQuery(searchTerm));
       filtered = searchResults
         .map((result) => itemMap.get(result.id + ""))
         .filter((item): item is T => !!item);
