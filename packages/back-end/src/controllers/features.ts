@@ -203,6 +203,7 @@ import {
   stampRuleForEnvs,
   updateRuleById,
   removeRuleById,
+  removeRuleByIdFromEnv,
 } from "back-end/src/util/revisionRuleOps";
 import {
   getSDKPayloadCacheLocation,
@@ -5103,12 +5104,17 @@ export async function getDraftandReviewRevisions(
 }
 
 export async function deleteFeatureRule(
-  req: AuthRequest<{ ruleId: string }, { id: string; version: string }>,
+  req: AuthRequest<
+    { ruleId: string; environment?: string },
+    { id: string; version: string }
+  >,
   res: Response<{ status: 200; version: number }, EventUserForResponseLocals>,
 ) {
   const context = getContextFromReq(req);
   const { id, version } = req.params;
   const { ruleId } = req.body;
+  // Set when deleting from a single-environment tab: only that env is removed.
+  const environment = req.body.environment ?? null;
 
   if (!ruleId) {
     throw new Error("Must provide ruleId to identify the rule");
@@ -5127,28 +5133,42 @@ export async function deleteFeatureRule(
     context.permissions.throwPermissionError();
   }
 
+  if (environment !== null && !environmentIds.includes(environment)) {
+    throw new Error(
+      `Environment "${environment}" is not applicable to this feature`,
+    );
+  }
+
   const revision = await getDraftRevision(context, feature, parseInt(version));
   const existingRules = cloneDeep(revision.rules ?? []);
 
-  const { rules: nextRules, removed: rule } = removeRuleById(
-    existingRules,
-    ruleId,
-  );
+  const {
+    rules: nextRules,
+    removed: rule,
+    fullyDeleted,
+  } = environment !== null
+    ? removeRuleByIdFromEnv(existingRules, ruleId, environment, environmentIds)
+    : { ...removeRuleById(existingRules, ruleId), fullyDeleted: true };
   const ruleChangedEnvs: string[] =
-    rule.allEnvironments || rule.environments === undefined
-      ? environmentIds
-      : (rule.environments ?? []);
+    environment !== null && !fullyDeleted
+      ? [environment]
+      : rule.allEnvironments || rule.environments === undefined
+        ? environmentIds
+        : (rule.environments ?? []);
 
   // Strip any pending ramp actions for the deleted rule so publish doesn't
   // create a schedule doc that would be immediately cleaned up as orphaned.
-  // Mirrors the REST handler's behavior.
+  // Mirrors the REST handler's behavior. A narrowed rule keeps its actions.
   const changes: { rules: FeatureRule[]; rampActions?: RevisionRampAction[] } =
     { rules: nextRules };
   const existingRampActions = revision.rampActions ?? [];
   const filteredRampActions = existingRampActions.filter(
     (a) => a.ruleId !== ruleId,
   );
-  if (filteredRampActions.length !== existingRampActions.length) {
+  if (
+    fullyDeleted &&
+    filteredRampActions.length !== existingRampActions.length
+  ) {
     changes.rampActions = filteredRampActions;
   }
 
@@ -5160,7 +5180,9 @@ export async function deleteFeatureRule(
     {
       user: res.locals.eventAudit,
       action: "delete rule",
-      subject: `rule ${ruleId}`,
+      subject: fullyDeleted
+        ? `rule ${ruleId}`
+        : `rule ${ruleId} in ${environment}`,
       value: JSON.stringify(rule),
     },
   );
@@ -5172,7 +5194,7 @@ export async function deleteFeatureRule(
     { environments: ruleChangedEnvs },
   );
 
-  if (rule.type === "experiment-ref" && rule.experimentId) {
+  if (fullyDeleted && rule.type === "experiment-ref" && rule.experimentId) {
     await removePendingFeatureDraftFromExperiment(
       context,
       rule.experimentId,

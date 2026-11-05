@@ -2,6 +2,7 @@ import omit from "lodash/omit";
 import { FeatureInterface, FeatureRule } from "shared/types/feature";
 import { FeatureRevisionInterface } from "shared/types/feature-revision";
 import { ruleAppliesToEnv } from "shared/util";
+import { narrowRuleForEnvRemoval } from "back-end/src/util/flattenRules";
 
 /**
  * Env-scoped CRUD helpers for the v2 flat `FeatureRule[]` array.
@@ -170,6 +171,33 @@ export function removeRuleById(
   const removed = rules[idx];
   const next = [...rules.slice(0, idx), ...rules.slice(idx + 1)];
   return { rules: next, removed };
+}
+
+// Remove one environment from a rule's footprint, dropping the rule entirely
+// only when that was its last environment.
+export function removeRuleByIdFromEnv(
+  rules: FeatureRule[],
+  ruleId: string,
+  environment: string,
+  applicableEnvs: string[],
+): { rules: FeatureRule[]; removed: FeatureRule; fullyDeleted: boolean } {
+  const idx = rules.findIndex((r) => r.id === ruleId);
+  if (idx === -1) throw new Error("Unknown rule");
+  const removed = rules[idx];
+  if (!ruleAppliesToEnv(removed, environment)) {
+    throw new Error(`Rule does not apply to environment "${environment}"`);
+  }
+  const decision = narrowRuleForEnvRemoval(
+    removed,
+    environment,
+    applicableEnvs,
+  );
+  if (decision.action === "delete") {
+    const next = [...rules.slice(0, idx), ...rules.slice(idx + 1)];
+    return { rules: next, removed, fullyDeleted: true };
+  }
+  const next = [...rules.slice(0, idx), decision.rule, ...rules.slice(idx + 1)];
+  return { rules: next, removed, fullyDeleted: false };
 }
 
 export function moveRuleInEnv(
