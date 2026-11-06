@@ -139,7 +139,8 @@ export interface SearchProps<T extends { id: string }> {
   persistSort?: boolean;
   defaultSortField: keyof T;
   defaultSortDir?: number;
-  undefinedLast?: boolean;
+  // `true` for every field, or only the listed fields
+  undefinedLast?: boolean | (keyof T)[];
   defaultMappings?: Partial<Record<keyof T, unknown>>;
   searchTermFilters?: {
     [key: string]: (
@@ -464,7 +465,11 @@ export function useSearch<T extends { id: string }>({
     sorted.sort((a, b) => {
       const comp1 = sortValue(a);
       const comp2 = sortValue(b);
-      if (undefinedLast) {
+      if (
+        Array.isArray(undefinedLast)
+          ? undefinedLast.includes(sort.field)
+          : undefinedLast
+      ) {
         if (comp1 === undefined && comp2 !== undefined) return 1;
         if (comp2 === undefined && comp1 !== undefined) return -1;
       }

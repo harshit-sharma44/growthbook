@@ -1234,6 +1234,21 @@ export function jsonToConds(
       return ret;
     }
 
+    // `condToJson` emits $and when one group repeats a field + operator
+    if ("$and" in parsed) {
+      if (!Array.isArray(parsed["$and"])) return null;
+      if (Object.keys(parsed).length > 1) return null;
+
+      const ret: Condition[] = [];
+      for (const part of parsed["$and"]) {
+        const conds = jsonToConds(JSON.stringify(part), attributes, true);
+        if (!conds) return null;
+        if (conds.length > 1) return null;
+        if (conds.length) ret.push(...conds[0]);
+      }
+      return ret.length ? [ret] : [];
+    }
+
     const conds: Condition[] = [];
     let valid = true;
 
@@ -1469,14 +1484,85 @@ function parseValue(
   return value;
 }
 
+// The key a simple-editor operator occupies inside `{ [field]: {...} }`.
+function getConditionOperatorKey(operator: string): string {
+  switch (operator) {
+    case "$notRegex":
+    case "$notRegexi":
+    case "$notIncludes":
+      return "$not";
+    case "$exists":
+    case "$notExists":
+      return "$exists";
+    case "$true":
+    case "$false":
+      return "$eq";
+    case "$includes":
+      return "$elemMatch";
+    case "$empty":
+    case "$notEmpty":
+      return "$size";
+    default:
+      return operator;
+  }
+}
+
+function getConditionOperatorValue(
+  operator: string,
+  value: string,
+  datatype?: AttributeData["datatype"],
+): unknown {
+  switch (operator) {
+    case "$notRegex":
+      return { $regex: value };
+    case "$notRegexi":
+      return { $regexi: value };
+    case "$notExists":
+      return false;
+    case "$exists":
+    case "$true":
+      return true;
+    case "$false":
+      return false;
+    case "$includes":
+      return { $eq: parseValue(value, datatype) };
+    case "$notIncludes":
+      return { $elemMatch: { $eq: parseValue(value, datatype) } };
+    case "$empty":
+      return 0;
+    case "$notEmpty":
+      return { $gt: 0 };
+    case "$in":
+    case "$nin":
+    case "$ini":
+    case "$nini":
+      // Allow for the empty list
+      if (value === "") return [];
+      return value
+        .split(",")
+        .map((x) => x.trim())
+        .map((x) => parseValue(x, datatype));
+    case "$regexi":
+    case "$inGroup":
+    case "$notInGroup":
+      return value;
+    default:
+      return parseValue(value, datatype);
+  }
+}
+
 export function condToJson(
   conds: Condition[][],
   attributes: Map<string, AttributeData>,
 ) {
   const or: unknown[] = [];
   conds.forEach((cond) => {
-    const obj = {};
+    // Conditions that would overwrite an existing `field.operator` key (e.g. two
+    // `url $regex` rows) start a new chunk; multiple chunks are joined by $and.
+    const chunks: Record<string, unknown>[] = [{}];
     cond.forEach(({ field, operator, value }) => {
+      let obj = chunks[chunks.length - 1];
+
       // Special handling for $savedGroups, $notSavedGroups since they're not real attributes
       if (field === "$savedGroups" || field === "$notSavedGroups") {
         const ids = value
@@ -1487,80 +1573,57 @@ export function condToJson(
 
         // $notSavedGroups is a shortcut for $not: { $savedGroups: [...] }
         if (field === "$notSavedGroups") {
-          obj["$not"] = obj["$not"] || {};
-          obj["$not"]["$savedGroups"] = obj["$not"]["$savedGroups"] || [];
-          obj["$not"]["$savedGroups"] = obj["$not"]["$savedGroups"].concat(ids);
+          const not = (obj["$not"] || {}) as { $savedGroups?: string[] };
+          not["$savedGroups"] = (not["$savedGroups"] || []).concat(ids);
+          obj["$not"] = not;
         } else {
           // field === "$savedGroups"
-          obj["$savedGroups"] = obj["$savedGroups"] || [];
-          obj["$savedGroups"] = obj["$savedGroups"].concat(ids);
+          obj["$savedGroups"] = (
+            (obj["$savedGroups"] || []) as string[]
+          ).concat(ids);
         }
         return;
       }
 
-      obj[field] = obj[field] || {};
-      if (operator === "$notRegex") {
-        obj[field]["$not"] = { $regex: value };
-      } else if (operator === "$notRegexi") {
-        obj[field]["$not"] = { $regexi: value };
-      } else if (operator === "$regexi") {
-        obj[field]["$regexi"] = value;
-      } else if (operator === "$notExists") {
-        obj[field]["$exists"] = false;
-      } else if (operator === "$exists") {
-        obj[field]["$exists"] = true;
-      } else if (operator === "$true") {
-        obj[field]["$eq"] = true;
-      } else if (operator === "$false") {
-        obj[field]["$eq"] = false;
-      } else if (operator === "$includes") {
-        obj[field]["$elemMatch"] = {
-          $eq: parseValue(value, attributes.get(field)?.datatype),
-        };
-      } else if (operator === "$notIncludes") {
-        obj[field]["$not"] = {
-          $elemMatch: {
-            $eq: parseValue(value, attributes.get(field)?.datatype),
-          },
-        };
-      } else if (operator === "$empty") {
-        obj[field]["$size"] = 0;
-      } else if (operator === "$notEmpty") {
-        obj[field]["$size"] = { $gt: 0 };
-      } else if (
-        operator === "$in" ||
-        operator === "$nin" ||
-        operator === "$ini" ||
-        operator === "$nini"
-      ) {
-        // Allow for the empty list
-        if (value === "") {
-          obj[field][operator] = [];
-        } else {
-          obj[field][operator] = value
-            .split(",")
-            .map((x) => x.trim())
-            .map((x) => parseValue(x, attributes.get(field)?.datatype));
-        }
-      } else if (operator === "$inGroup" || operator === "$notInGroup") {
-        obj[field][operator] = value;
-      } else {
-        obj[field][operator] = parseValue(
-          value,
-          attributes.get(field)?.datatype,
-        );
+      const key = getConditionOperatorKey(operator);
+      let fieldObj = obj[field] as Record<string, unknown> | undefined;
+      if (fieldObj && key in fieldObj) {
+        obj = {};
+        chunks.push(obj);
+        fieldObj = undefined;
       }
+      fieldObj = fieldObj || {};
+      fieldObj[key] = getConditionOperatorValue(
+        operator,
+        value,
+        attributes.get(field)?.datatype,
+      );
+      obj[field] = fieldObj;
     });
 
-    // Simplify {$eg: ""} rules
-    Object.keys(obj).forEach((key) => {
-      if (Object.keys(obj[key]).length === 1 && "$eq" in obj[key]) {
-        obj[key] = obj[key]["$eq"];
-      }
-    });
+    const parts = chunks
+      .map((obj) => {
+        // Simplify {$eq: ""} rules
+        Object.keys(obj).forEach((key) => {
+          const v = obj[key];
+          if (
+            v &&
+            typeof v === "object" &&
+            !Array.isArray(v) &&
+            Object.keys(v).length === 1 &&
+            "$eq" in v
+          ) {
+            obj[key] = v["$eq"];
+          }
+        });
+        return obj;
+      })
+      .filter((obj) => Object.keys(obj).length > 0);
 
-    if (Object.keys(obj).length) {
-      or.push(obj);
+    if (parts.length === 1) {
+      or.push(parts[0]);
+    } else if (parts.length > 1) {
+      or.push({ $and: parts });
     }
   });
 

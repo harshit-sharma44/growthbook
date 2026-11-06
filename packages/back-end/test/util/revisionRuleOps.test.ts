@@ -1,6 +1,8 @@
 import { FeatureRule } from "shared/types/feature";
 import {
   insertRuleBefore,
+  isNoOpRuleEdit,
+  mergeRuleEdit,
   moveRuleInEnv,
   projectRulesForEnv,
   removeRuleAtEnvIndex,
@@ -190,5 +192,58 @@ describe("insertRuleBefore", () => {
       undefined,
     );
     expect(next.map((r) => r.id)).toEqual(["a", "new"]);
+  });
+});
+
+describe("mergeRuleEdit", () => {
+  it("lays inbound fields over the stored rule", () => {
+    const merged = mergeRuleEdit(envRule("a", "prod", { condition: "{}" }), {
+      value: "w",
+    });
+    expect(merged).toMatchObject({ id: "a", value: "w", condition: "{}" });
+  });
+
+  it("drops the stale env and project lists for an all-* scope", () => {
+    const merged = mergeRuleEdit(
+      envRule("a", "prod", { allProjects: false, projects: ["p1"] }),
+      { allEnvironments: true, allProjects: true },
+    );
+    expect(merged.allEnvironments).toBe(true);
+    expect("environments" in merged).toBe(false);
+    expect("projects" in merged).toBe(false);
+  });
+});
+
+describe("isNoOpRuleEdit", () => {
+  const live = envRule("a", "prod", {
+    condition: '{"country":"US"}',
+    enabled: true,
+    savedGroups: [],
+    prerequisites: [],
+    scheduleRules: [],
+  });
+
+  it("is true when the inbound rule repeats the stored one", () => {
+    expect(isNoOpRuleEdit(live, { ...live })).toBe(true);
+  });
+
+  it("is true when only fields the rule type does not declare differ", () => {
+    expect(
+      isNoOpRuleEdit(live, {
+        ...live,
+        hashAttribute: "id",
+      } as Partial<FeatureRule>),
+    ).toBe(true);
+  });
+
+  it("is false when a declared field changes", () => {
+    expect(isNoOpRuleEdit(live, { ...live, value: "w" })).toBe(false);
+    expect(isNoOpRuleEdit(live, { ...live, enabled: false })).toBe(false);
+  });
+
+  it("is false when the scope changes", () => {
+    expect(
+      isNoOpRuleEdit(live, { allEnvironments: false, environments: ["dev"] }),
+    ).toBe(false);
   });
 });

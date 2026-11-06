@@ -374,7 +374,95 @@ describe("json <-> conds", () => {
     expect(condToJson(conds, attributeMap)).toEqual(json);
   });
 
+  it("same field and operator twice combines with $and", () => {
+    const json = stringify({
+      $and: [{ str: { $regex: "London" } }, { str: { $regex: "Istanbul" } }],
+    });
+    const conds = [
+      [
+        { field: "str", operator: "$regex", value: "London" },
+        { field: "str", operator: "$regex", value: "Istanbul" },
+      ],
+    ];
+    expect(condToJson(conds, attributeMap)).toEqual(json);
+    expect(jsonToConds(json, attributeMap)).toEqual(conds);
+  });
+
+  it("repeated field keeps other conditions and their order", () => {
+    const conds = [
+      [
+        { field: "num", operator: "$gt", value: "1" },
+        { field: "str", operator: "$eq", value: "foo" },
+        { field: "num", operator: "$gt", value: "5" },
+        { field: "bool", operator: "$true", value: "" },
+      ],
+    ];
+    const json = stringify({
+      $and: [
+        { num: { $gt: 1 }, str: "foo" },
+        { num: { $gt: 5 }, bool: true },
+      ],
+    });
+    expect(condToJson(conds, attributeMap)).toEqual(json);
+    expect(jsonToConds(json, attributeMap)).toEqual(conds);
+  });
+
+  it("repeated $not-based operators on the same field combine with $and", () => {
+    const conds = [
+      [
+        { field: "str", operator: "$notRegex", value: "a" },
+        { field: "str", operator: "$notRegexi", value: "b" },
+      ],
+    ];
+    const json = stringify({
+      $and: [
+        { str: { $not: { $regex: "a" } } },
+        { str: { $not: { $regexi: "b" } } },
+      ],
+    });
+    expect(condToJson(conds, attributeMap)).toEqual(json);
+    expect(jsonToConds(json, attributeMap)).toEqual(conds);
+  });
+
+  it("different operators on the same field still merge", () => {
+    const conds = [
+      [
+        { field: "num", operator: "$gt", value: "1" },
+        { field: "num", operator: "$lt", value: "5" },
+      ],
+    ];
+    expect(condToJson(conds, attributeMap)).toEqual(
+      stringify({ num: { $gt: 1, $lt: 5 } }),
+    );
+  });
+
+  it("$and inside $or", () => {
+    const json = stringify({
+      $or: [
+        { $and: [{ str: { $regex: "a" } }, { str: { $regex: "b" } }] },
+        { num: 10 },
+      ],
+    });
+    const conds = [
+      [
+        { field: "str", operator: "$regex", value: "a" },
+        { field: "str", operator: "$regex", value: "b" },
+      ],
+      [{ field: "num", operator: "$eq", value: "10" }],
+    ];
+    expect(condToJson(conds, attributeMap)).toEqual(json);
+    expect(jsonToConds(json, attributeMap)).toEqual(conds);
+  });
+
   // Advanced mode
+  it("$and with other fields", () => {
+    const json = stringify({ $and: [{ num: 10 }], str: "foo" });
+    expect(jsonToConds(json, attributeMap)).toEqual(null);
+  });
+  it("$and containing $or", () => {
+    const json = stringify({ $and: [{ $or: [{ num: 10 }, { num: 20 }] }] });
+    expect(jsonToConds(json, attributeMap)).toEqual(null);
+  });
   it("unknown attribute", () => {
     const json = stringify({ unknown: "foo" });
     expect(jsonToConds(json, attributeMap)).toEqual(null);

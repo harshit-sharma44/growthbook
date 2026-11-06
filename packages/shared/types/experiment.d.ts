@@ -240,7 +240,7 @@ export type ComputedExperimentInterface = ExperimentInterfaceStringDates & {
   projectName?: string;
   projectIsDeReferenced?: string | boolean;
   tab: string;
-  date: string;
+  date: string | null;
   statusSortOrder: number;
   statusIndicator: StatusIndicatorData;
   isWatched?: boolean;
