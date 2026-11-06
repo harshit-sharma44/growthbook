@@ -1,7 +1,9 @@
+import isEqual from "lodash/isEqual";
 import omit from "lodash/omit";
 import { FeatureInterface, FeatureRule } from "shared/types/feature";
 import { FeatureRevisionInterface } from "shared/types/feature-revision";
 import { ruleAppliesToEnv } from "shared/util";
+import { stripUnknownRuleFields } from "shared/validators";
 
 /**
  * Env-scoped CRUD helpers for the v2 flat `FeatureRule[]` array.
@@ -69,6 +71,36 @@ export function updateRuleById(
   const updated = updater(existing);
   const next = [...rules.slice(0, idx), updated, ...rules.slice(idx + 1)];
   return { rules: next, updated, existing };
+}
+
+// Inbound fields over the stored rule; an all-* scope drops its stale list.
+export function mergeRuleEdit(
+  existing: FeatureRule,
+  incoming: Partial<FeatureRule>,
+): FeatureRule {
+  let merged = { ...existing, ...incoming } as FeatureRule;
+  if (merged.allEnvironments === true) {
+    merged = {
+      ...omit(merged, ["environments"]),
+      allEnvironments: true,
+    } as FeatureRule;
+  }
+  if (merged.allProjects === true) {
+    merged = omit(merged, ["projects"]) as FeatureRule;
+  }
+  return merged;
+}
+
+// Same comparison the revision diff uses, so a save that would render as
+// "No changes" is detected as one.
+export function isNoOpRuleEdit(
+  existing: FeatureRule,
+  incoming: Partial<FeatureRule>,
+): boolean {
+  return isEqual(
+    stripUnknownRuleFields(mergeRuleEdit(existing, incoming)),
+    stripUnknownRuleFields(existing),
+  );
 }
 
 // Update by flat (unfiltered) index. Fallback when no `ruleId` is available.

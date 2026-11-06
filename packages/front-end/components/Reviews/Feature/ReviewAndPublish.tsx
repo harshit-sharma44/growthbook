@@ -1800,7 +1800,12 @@ export default function ReviewAndPublish({
   }
 
   const allDiffs = [...resultDiffs, ...rampDiffs];
-  const hasChanges = mergeResultHasChanges(mergeResult) || rampDiffs.length > 0;
+  // The merge compares raw rules, but the diff ignores fields no rule type
+  // declares; a draft whose only difference is such a field has nothing to publish.
+  const hasChanges =
+    rampDiffs.length > 0 ||
+    (mergeResultHasChanges(mergeResult) &&
+      (!mergeResult.success || resultDiffs.some((d) => d.a !== d.b)));
 
   const isStranded = isStrandedLiveRevision({
     featureVersion: feature.version,

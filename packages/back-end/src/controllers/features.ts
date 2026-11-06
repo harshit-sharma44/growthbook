@@ -202,6 +202,8 @@ import {
   moveFlatRule,
   stampRuleForEnvs,
   updateRuleById,
+  mergeRuleEdit,
+  isNoOpRuleEdit,
   removeRuleById,
 } from "back-end/src/util/revisionRuleOps";
 import {
@@ -4372,6 +4374,20 @@ export async function putFeatureRule(
   }
 
   if (!revision) {
+    // Saving an unchanged rule against live would open an empty draft.
+    const liveRule = (feature.rules ?? []).find((r) => r.id === ruleId);
+    if (
+      liveRule &&
+      (!rampSchedulePayload || rampSchedulePayload.mode === "clear")
+    ) {
+      const candidate = cloneDeep(effectiveRule) as FeatureRule;
+      if (!candidate.id) candidate.id = ruleId;
+      inheritStoredRolloutSeeds([candidate], feature.rules ?? []);
+      addIdsToFlatRules([candidate], feature.id);
+      if (isNoOpRuleEdit(liveRule, candidate)) {
+        return res.status(200).json({ status: 200, version: feature.version });
+      }
+    }
     revision = await getDraftRevision(context, feature, feature.version);
   }
 
@@ -4559,23 +4575,9 @@ export async function putFeatureRule(
     // "clear" removes any pending ramp action for this rule without adding a new one
   }
 
-  // Drop stale `environments`/`projects` when merge produces an all-* scope.
-  const { rules: nextRules } = updateRuleById(existingRules, ruleId, (e) => {
-    let merged = {
-      ...e,
-      ...(effectiveRule as Partial<FeatureRule>),
-    } as FeatureRule;
-    if (merged.allEnvironments === true) {
-      merged = {
-        ...omit(merged, ["environments"]),
-        allEnvironments: true,
-      } as FeatureRule;
-    }
-    if (merged.allProjects === true) {
-      merged = omit(merged, ["projects"]) as FeatureRule;
-    }
-    return merged;
-  });
+  const { rules: nextRules } = updateRuleById(existingRules, ruleId, (e) =>
+    mergeRuleEdit(e, effectiveRule as Partial<FeatureRule>),
+  );
 
   // The rule write checks, then the config-backed value net (running-experiment
   // / bandit variations edited from the feature must satisfy the backing
