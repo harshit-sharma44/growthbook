@@ -228,18 +228,30 @@ const ExperimentsListTable: React.FC<ExperimentsListTableProps> = ({
                 />
               </TableCell>
               <TableCell>{e.ownerName ?? <em>None</em>}</TableCell>
-              <TableCell title={datetime(e.date)}>
-                {e.tab === "running"
-                  ? "started"
-                  : e.tab === "drafts"
-                    ? "created"
-                    : e.tab === "stopped"
-                      ? "ended"
-                      : e.tab === "archived"
-                        ? "updated"
-                        : ""}{" "}
-                {date(e.date)}
-              </TableCell>
+              {e.date === null ? (
+                <TableCell>
+                  <em>
+                    {e.tab === "stopped"
+                      ? "no end date"
+                      : e.tab === "running"
+                        ? "no start date"
+                        : "no date"}
+                  </em>
+                </TableCell>
+              ) : (
+                <TableCell title={datetime(e.date)}>
+                  {e.tab === "running"
+                    ? "started"
+                    : e.tab === "drafts"
+                      ? "created"
+                      : e.tab === "stopped"
+                        ? "ended"
+                        : e.tab === "archived"
+                          ? "updated"
+                          : ""}{" "}
+                  {date(e.date)}
+                </TableCell>
+              )}
               {needsStatusColumn ? (
                 <TableCell>
                   {e.statusIndicator.tooltip &&

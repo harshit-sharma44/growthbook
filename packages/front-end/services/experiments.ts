@@ -181,7 +181,11 @@ export const compareRows = (
   return sortDirection === "desc" ? -comparisonResult : comparisonResult;
 };
 
-export function experimentDate(exp: ExperimentInterfaceStringDates): string {
+// Null when the date is missing, e.g. a stopped experiment whose last phase
+// has no end date.
+export function experimentDateOrNull(
+  exp: ExperimentInterfaceStringDates,
+): string | null {
   return (
     (exp.archived
       ? exp.dateUpdated
@@ -189,8 +193,12 @@ export function experimentDate(exp: ExperimentInterfaceStringDates): string {
         ? exp.phases?.[exp.phases?.length - 1]?.dateStarted
         : exp.status === "stopped"
           ? exp.phases?.[exp.phases?.length - 1]?.dateEnded
-          : exp.dateCreated) ?? new Date().toISOString() // fallback to now
+          : exp.dateCreated) || null
   );
+}
+
+export function experimentDate(exp: ExperimentInterfaceStringDates): string {
+  return experimentDateOrNull(exp) ?? new Date().toISOString(); // fallback to now
 }
 
 /**
@@ -601,7 +609,7 @@ export function useExperimentSearch({
           : exp.status === "draft"
             ? "drafts"
             : exp.status,
-        date: experimentDate(exp),
+        date: experimentDateOrNull(exp),
         statusIndicator,
         statusSortOrder,
         isWatched,
@@ -622,6 +630,8 @@ export function useExperimentSearch({
     // 0 is falsy and would otherwise fall through to undefined in the sort
     // comparator, leaving healthy rows unordered against the rest.
     defaultMappings: { healthSortOrder: 0 },
+    // Experiments without a date (e.g. stopped with no end date) sort last
+    undefinedLast: ["date"],
     searchFields: ["name^3", "trackingKey^2", "hypothesis^2", "description"],
     searchTermFilters: {
       is: (item) => {
