@@ -4,6 +4,7 @@ import {
   moveRuleInEnv,
   projectRulesForEnv,
   removeRuleAtEnvIndex,
+  removeRuleByIdFromEnv,
   stampRuleForEnvs,
   updateRuleAtEnvIndex,
 } from "back-end/src/util/revisionRuleOps";
@@ -126,6 +127,111 @@ describe("removeRuleAtEnvIndex", () => {
     expect(() => removeRuleAtEnvIndex(rules, "dev", 5)).toThrow(
       "Invalid rule index",
     );
+  });
+});
+
+describe("removeRuleByIdFromEnv", () => {
+  const applicable = ["dev", "staging", "prod"];
+
+  it("drops only the given env from a multi-env rule", () => {
+    const shared = envRule("shared", "staging", {
+      environments: ["staging", "prod"],
+    });
+    const dev1 = envRule("dev1", "dev");
+    const rules = [shared, dev1];
+
+    const {
+      rules: next,
+      removed,
+      fullyDeleted,
+    } = removeRuleByIdFromEnv(rules, "shared", "staging", applicable);
+    expect(removed).toBe(shared);
+    expect(fullyDeleted).toBe(false);
+    expect(next).toHaveLength(2);
+    expect(next[0].id).toBe("shared");
+    expect(next[0].environments).toEqual(["prod"]);
+    expect(next[0].allEnvironments).toBe(false);
+    expect(next[1]).toBe(dev1);
+  });
+
+  it("narrows an all-env rule to the other applicable envs", () => {
+    const shared = allEnvRule("shared");
+    const { rules: next, fullyDeleted } = removeRuleByIdFromEnv(
+      [shared],
+      "shared",
+      "staging",
+      applicable,
+    );
+    expect(fullyDeleted).toBe(false);
+    expect(next[0].allEnvironments).toBe(false);
+    expect(next[0].environments).toEqual(["dev", "prod"]);
+  });
+
+  it("treats a rule without env tags as applying everywhere", () => {
+    const legacy = {
+      id: "legacy",
+      description: "",
+      type: "force",
+      value: "v",
+    } as FeatureRule;
+    const { rules: next, fullyDeleted } = removeRuleByIdFromEnv(
+      [legacy],
+      "legacy",
+      "prod",
+      applicable,
+    );
+    expect(fullyDeleted).toBe(false);
+    expect(next[0].environments).toEqual(["dev", "staging"]);
+  });
+
+  it("deletes the rule when the env was its last one", () => {
+    const dev1 = envRule("dev1", "dev");
+    const prod1 = envRule("prod1", "prod");
+    const {
+      rules: next,
+      removed,
+      fullyDeleted,
+    } = removeRuleByIdFromEnv([dev1, prod1], "dev1", "dev", applicable);
+    expect(fullyDeleted).toBe(true);
+    expect(removed).toBe(dev1);
+    expect(next).toEqual([prod1]);
+  });
+
+  it("deletes an all-env rule when only one env is applicable", () => {
+    const shared = allEnvRule("shared");
+    const { rules: next, fullyDeleted } = removeRuleByIdFromEnv(
+      [shared],
+      "shared",
+      "prod",
+      ["prod"],
+    );
+    expect(fullyDeleted).toBe(true);
+    expect(next).toEqual([]);
+  });
+
+  it("ignores non-applicable envs left on the rule", () => {
+    const rule = envRule("r", "prod", { environments: ["prod", "gone"] });
+    const { rules: next, fullyDeleted } = removeRuleByIdFromEnv(
+      [rule],
+      "r",
+      "prod",
+      applicable,
+    );
+    expect(fullyDeleted).toBe(true);
+    expect(next).toEqual([]);
+  });
+
+  it("throws when the rule does not apply to the env", () => {
+    const prod1 = envRule("prod1", "prod");
+    expect(() =>
+      removeRuleByIdFromEnv([prod1], "prod1", "dev", applicable),
+    ).toThrow('Rule does not apply to environment "dev"');
+  });
+
+  it("throws on an unknown rule id", () => {
+    expect(() =>
+      removeRuleByIdFromEnv([envRule("a", "dev")], "b", "dev", applicable),
+    ).toThrow("Unknown rule");
   });
 });
 

@@ -22,6 +22,7 @@ import {
   getReviewSetting,
   getTargetingProjectIds,
   isRampScheduleServing,
+  ruleFootprint,
 } from "shared/util";
 import { Box, Flex, IconButton } from "@radix-ui/themes";
 import { RxCircleBackslash } from "react-icons/rx";
@@ -380,6 +381,13 @@ export const Rule = forwardRef<HTMLDivElement, RuleProps>(
 
     const allEnvironments = useEnvironments();
     const environments = filterEnvironmentsByFeature(allEnvironments, feature);
+    // Deleting from a single-environment tab only removes that environment.
+    const envsKeepingRule = isAllEnvsView
+      ? []
+      : ruleFootprint(
+          rule,
+          environments.map((e) => e.id),
+        ).filter((e) => e !== environment);
     const [safeRolloutStatusModalOpen, setSafeRolloutStatusModalOpen] =
       useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -883,7 +891,10 @@ export const Rule = forwardRef<HTMLDivElement, RuleProps>(
                 `/feature/${feature.id}/${targetVersion}/rule`,
                 {
                   method: "DELETE",
-                  body: JSON.stringify({ ruleId: rule.id }),
+                  body: JSON.stringify({
+                    ruleId: rule.id,
+                    ...(isAllEnvsView ? {} : { environment }),
+                  }),
                 },
               );
               await mutate();
@@ -903,8 +914,17 @@ export const Rule = forwardRef<HTMLDivElement, RuleProps>(
                 triggerPrefix="Rule deletion will be"
               />
               <Text color="text-high" as="p">
-                This rule will be removed when the revision is published. The
-                live feature will not change until then.
+                {envsKeepingRule.length > 0 ? (
+                  <>
+                    This rule will be removed from{" "}
+                    <strong>{environment}</strong> when the revision is
+                    published. It will stay in{" "}
+                    <strong>{envsKeepingRule.join(", ")}</strong>.
+                  </>
+                ) : (
+                  "This rule will be removed when the revision is published."
+                )}{" "}
+                The live feature will not change until then.
               </Text>
             </Box>
           </ModalStandard>
