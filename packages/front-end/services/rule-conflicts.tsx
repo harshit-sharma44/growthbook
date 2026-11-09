@@ -877,6 +877,25 @@ function provablyDisjoint(a: Atom, b: Atom): boolean {
   return false; // notIn/notIn, mismatched range types, … → can't prove disjoint
 }
 
+// Can we *prove* no user matches both rules? Each rule's `constraints` are
+// top-level AND conjuncts (every matched user satisfies all of them), so if the
+// two rules require provably-disjoint values for any shared attribute, their
+// populations can never overlap — whatever else either rule targets, e.g.
+// `country = US AND language = ru` vs `country = US AND language = de`.
+function rulesProvablyDisjoint(
+  a: ParsedTargeting,
+  b: ParsedTargeting,
+): boolean {
+  if (!a.constraints.length || !b.constraints.length) return false;
+  const bAtoms = new Map<string, Atom>(
+    b.constraints.map((c) => [c.attr, c.atom]),
+  );
+  return a.constraints.some((c) => {
+    const other = bAtoms.get(c.attr);
+    return other !== undefined && provablyDisjoint(c.atom, other);
+  });
+}
+
 // Intersect two atoms on the same attribute into a single atom meaning "matches
 // both". Returns null when the result can't be expressed as one atom of our
 // types (not-in ∩ range, numeric ∩ version) — the caller then treats that
@@ -1241,6 +1260,19 @@ export function getRuleReachability(
     //    all traffic regardless of attributes. `attr` null.
     const softByAttr = new Map<string | null, string[]>();
     if (!unreachable) {
+      // A rule above whose audience is provably disjoint from this rule's (on
+      // any attribute) can never take its traffic, so it never overlaps on any
+      // other shared attribute either. Memoized per rule above, since it can be
+      // visited once per shared attribute.
+      const disjointCache = new Map<string, boolean>();
+      const isDisjoint = (r: Consumer): boolean => {
+        let d = disjointCache.get(r.id);
+        if (d === undefined) {
+          d = rulesProvablyDisjoint(target, r.parsed);
+          disjointCache.set(r.id, d);
+        }
+        return d;
+      };
       for (const attr of target.attributes) {
         if (hardAttrs.has(attr)) continue;
         const targetOpaque = !target.modeledAttrs.has(attr);
@@ -1250,6 +1282,7 @@ export function getRuleReachability(
         // Only traffic-serving rules above that also reference this attribute
         // can overlap — every other rule is irrelevant, so we never scan them.
         for (const r of trafficByAttr.get(attr) ?? []) {
+          if (isDisjoint(r)) continue;
           const consumerOpaque = !r.parsed.modeledAttrs.has(attr);
           // Can't prove this rule above leaves our targeted users alone?
           let overlaps = targetOpaque || consumerOpaque;

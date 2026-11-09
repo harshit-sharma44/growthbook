@@ -568,6 +568,93 @@ describe("getRuleReachability — soft conflicts (attribute overlap)", () => {
     });
   });
 
+  it("does not warn when another shared attribute makes the audiences disjoint", () => {
+    // Same country and install-time targeting, but `language = ru` vs
+    // `language = de` means no user can match both rules.
+    const result = analyze([
+      rollout(
+        "r1",
+        0.5,
+        cond({
+          country: "US",
+          install_unix_time: { $gt: 1700000000 },
+          language: "ru",
+        }),
+      ),
+      rollout(
+        "r2",
+        1,
+        cond({
+          country: "US",
+          install_unix_time: { $gt: 1700000000 },
+          language: "de",
+        }),
+      ),
+    ]);
+    expect(result.get("r2")).toEqual({
+      unreachable: false,
+      hardConflicts: [],
+      softConflicts: [],
+    });
+  });
+
+  it("still warns when the multi-attribute audiences can overlap", () => {
+    // Control: both rules target `language = ru`, so they overlap.
+    const result = analyze([
+      rollout(
+        "r1",
+        0.5,
+        cond({
+          country: "US",
+          install_unix_time: { $gt: 1700000000 },
+          language: "ru",
+        }),
+      ),
+      rollout(
+        "r2",
+        1,
+        cond({
+          country: "US",
+          install_unix_time: { $gt: 1700000000 },
+          language: "ru",
+        }),
+      ),
+    ]);
+    expect(result.get("r2")).toEqual({
+      unreachable: false,
+      hardConflicts: [],
+      softConflicts: [
+        { attr: "country", consumingRuleIds: ["r1"] },
+        { attr: "install_unix_time", consumingRuleIds: ["r1"] },
+        { attr: "language", consumingRuleIds: ["r1"] },
+      ],
+    });
+  });
+
+  it("does not warn on an opaque shared attribute when another attribute is disjoint", () => {
+    const result = analyze([
+      force("r1", {
+        condition: cond({ browser: { $regex: "Saf" }, country: "US" }),
+      }),
+      force("r2", {
+        condition: cond({ browser: { $regex: "Chr" }, country: "CA" }),
+      }),
+    ]);
+    expect(result.get("r2")).toEqual({
+      unreachable: false,
+      hardConflicts: [],
+      softConflicts: [],
+    });
+  });
+
+  it("does not warn when disjoint numeric ranges separate otherwise-equal rules", () => {
+    const result = analyze([
+      rollout("r1", 0.5, cond({ country: "US", age: { $lt: 18 } })),
+      force("r2", { condition: cond({ country: "US", age: { $gte: 18 } }) }),
+    ]);
+    expect(result.get("r2")?.softConflicts).toEqual([]);
+  });
+
   it("does not warn when an opaque rule above targets a different attribute", () => {
     const result = analyze([
       force("r1", { condition: cond({ country: "US" }) }),
