@@ -45,6 +45,15 @@ body {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+// Let code values (e.g. JSON feature values) wrap inside their container
+// instead of forcing it wider. `overflow-wrap: anywhere` also breaks long
+// unbroken strings such as URLs and lowers the min-content width, so table
+// cells and flex items can shrink to fit.
+.wrap-code,
+.wrap-code code {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
+}
 
 #block-menu-container {
   z-index: 990;
