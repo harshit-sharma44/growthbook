@@ -5,9 +5,14 @@ import {
   SimpleSchema,
 } from "shared/types/feature";
 import { FeatureRevisionInterface } from "shared/types/feature-revision";
-import { OrganizationSettings, RequireReview } from "shared/types/organization";
+import {
+  Environment,
+  OrganizationSettings,
+  RequireReview,
+} from "shared/types/organization";
 import {
   validateFeatureValue,
+  filterEnvironmentsByFeature,
   getValidation,
   validateJSONFeatureValue,
   autoMerge,
@@ -2390,5 +2395,31 @@ describe("toV2FeatureSnapshot", () => {
     expect(
       (input as unknown as { rules?: FeatureRule[] }).rules,
     ).toBeUndefined();
+  });
+});
+
+describe("filterEnvironmentsByFeature", () => {
+  const environments: Environment[] = [
+    { id: "production", description: "", projects: [] },
+    { id: "staging-b", description: "", projects: ["prj_b"] },
+  ];
+  const ids = (envs: Environment[]) => envs.map((e) => e.id);
+
+  it("excludes environments scoped to other projects", () => {
+    expect(
+      ids(filterEnvironmentsByFeature(environments, { project: "prj_a" })),
+    ).toEqual(["production"]);
+  });
+
+  it("includes environments scoped to the feature's project", () => {
+    expect(
+      ids(filterEnvironmentsByFeature(environments, { project: "prj_b" })),
+    ).toEqual(["production", "staging-b"]);
+  });
+
+  it("includes all environments when the feature has no project", () => {
+    expect(
+      ids(filterEnvironmentsByFeature(environments, { project: "" })),
+    ).toEqual(["production", "staging-b"]);
   });
 });
