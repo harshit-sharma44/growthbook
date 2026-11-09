@@ -4,6 +4,7 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildFilterUrl,
+  buildSearchQuery,
   filterSearchTerm,
   tagFilterOnClick,
   transformQuery,
@@ -599,6 +600,66 @@ describe("useSearch", () => {
         "first row token",
         "second row token",
       ]);
+    });
+  });
+
+  describe("punctuation-joined search terms", () => {
+    type Feature = { id: string; description: string };
+    const items: Feature[] = [
+      { id: "foo", description: "" },
+      { id: "foo_bar_baz", description: "" },
+      { id: "checkout-v2", description: "New checkout page" },
+    ];
+
+    function search(term: string) {
+      const { result } = renderHook(() =>
+        useSearch<Feature>({
+          items,
+          searchFields: ["id^3", "description"],
+          localStorageKey: "search-service-test-punctuation",
+          defaultSortField: "id",
+        }),
+      );
+      act(() => {
+        result.current.setSearchValue(term);
+      });
+      return result.current.filteredItems.map((i) => i.id);
+    }
+
+    it("does not match items containing only part of an underscored term", () => {
+      expect(search("foo_bar")).toStrictEqual(["foo_bar_baz"]);
+      expect(search("foo_b")).toStrictEqual(["foo_bar_baz"]);
+      expect(search("foo_bar_baz")).toStrictEqual(["foo_bar_baz"]);
+    });
+
+    it("still matches a part of an underscored key", () => {
+      expect(search("bar")).toStrictEqual(["foo_bar_baz"]);
+      expect(search("foo")).toStrictEqual(["foo", "foo_bar_baz"]);
+    });
+
+    it("treats other punctuation the same way", () => {
+      expect(search("checkout-v2")).toStrictEqual(["checkout-v2"]);
+      expect(search("foo-bar")).toStrictEqual(["foo_bar_baz"]);
+    });
+
+    it("keeps OR semantics between whitespace-separated words", () => {
+      expect(search("foo_bar checkout")).toStrictEqual([
+        "foo_bar_baz",
+        "checkout-v2",
+      ]);
+      expect(search("foo bar")).toStrictEqual(["foo_bar_baz", "foo"]);
+    });
+  });
+
+  describe("buildSearchQuery", () => {
+    it("ORs words and ANDs the parts within each word", () => {
+      expect(buildSearchQuery("  foo_bar   baz ")).toStrictEqual({
+        combineWith: "OR",
+        queries: [
+          { combineWith: "AND", queries: ["foo_bar"] },
+          { combineWith: "AND", queries: ["baz"] },
+        ],
+      });
     });
   });
 
