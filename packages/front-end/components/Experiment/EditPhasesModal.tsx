@@ -25,13 +25,17 @@ export default function EditPhasesModal({
   source,
 }: Props) {
   const isDraft = experiment.status === "draft";
-  const isMultiPhase = experiment.phases.length > 1;
+  const numPhases = experiment.phases.length;
+  // A draft with exactly one phase skips the list and edits that phase directly.
+  // A draft with no phases (e.g. its only phase was deleted) must show the list,
+  // since there is no phase 0 to edit.
+  const editSinglePhase = isDraft && numPhases === 1;
   const hasStoppedPhases = experiment.phases.some((p) => p.dateEnded);
   const hasLinkedChanges =
     !!experiment.linkedFeatures?.length || !!experiment.hasVisualChangesets;
 
   const [editPhase, setEditPhase] = useState<number | null>(
-    isDraft && !isMultiPhase ? 0 : null
+    editSinglePhase ? 0 : null
   );
 
   const { apiCall } = useAuth();
@@ -40,7 +44,7 @@ export default function EditPhasesModal({
     return (
       <NewPhaseForm
         close={() => {
-          if (isDraft && !isMultiPhase) {
+          if (editSinglePhase) {
             close();
           } else {
             setEditPhase(null);
@@ -52,12 +56,12 @@ export default function EditPhasesModal({
     );
   }
 
-  if (editPhase !== null) {
+  if (editPhase !== null && experiment.phases[editPhase]) {
     return (
       <EditPhaseModal
         source="edit-phases-modal"
         close={() => {
-          if (isDraft && !isMultiPhase) {
+          if (editSinglePhase) {
             close();
           } else {
             setEditPhase(null);
@@ -131,26 +135,32 @@ export default function EditPhasesModal({
                 >
                   Edit
                 </button>
-                {(experiment.status !== "running" || !hasLinkedChanges) && (
-                  <DeleteButton
-                    className="ml-2"
-                    displayName="phase"
-                    additionalMessage={
-                      experiment.phases.length === 1
-                        ? "This is the only phase. Deleting this will revert the experiment to a draft."
-                        : ""
-                    }
-                    onClick={async () => {
-                      await apiCall(`/experiment/${experiment.id}/phase/${i}`, {
-                        method: "DELETE",
-                      });
-                      mutateExperiment();
-                    }}
-                  />
-                )}
+                {(experiment.status !== "running" || !hasLinkedChanges) &&
+                  numPhases > 1 && (
+                    <DeleteButton
+                      className="ml-2"
+                      displayName="phase"
+                      onClick={async () => {
+                        await apiCall(
+                          `/experiment/${experiment.id}/phase/${i}`,
+                          {
+                            method: "DELETE",
+                          }
+                        );
+                        mutateExperiment();
+                      }}
+                    />
+                  )}
               </td>
             </tr>
           ))}
+          {numPhases === 0 && (
+            <tr>
+              <td colSpan={hasStoppedPhases ? 6 : 5}>
+                <em className="text-muted">This experiment has no phases.</em>
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
       {(experiment.status !== "running" || !hasLinkedChanges) && (

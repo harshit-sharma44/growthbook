@@ -1,7 +1,6 @@
 import React, { Fragment, useMemo, useState } from "react";
 import { FaQuestionCircle } from "react-icons/fa";
 import { SDKAttribute } from "back-end/types/organization";
-import { recursiveWalk } from "shared/util";
 import { BiHide, BiShow } from "react-icons/bi";
 import { BsXCircle } from "react-icons/bs";
 import { FeatureInterface } from "back-end/src/validators/features";
@@ -19,6 +18,7 @@ import { useUser } from "@/services/UserContext";
 import usePermissionsUtil from "@/hooks/usePermissionsUtils";
 import { useExperiments } from "@/hooks/useExperiments";
 import Button from "@/components/Radix/Button";
+import { getAttributeReferences } from "@/services/attributes";
 
 const MAX_REFERENCES = 100;
 const MAX_REFERENCES_PER_TYPE = 10;
@@ -43,61 +43,16 @@ const FeatureAttributesPage = (): React.ReactElement => {
     attributeGroups,
   } = useMemo(() => {
     const attributeKeys = attributeSchema.map((as) => as.property);
-    const attributeFeatureIds: Record<string, Set<string>> = {};
-    const attributeExperimentIds: Record<string, Set<string>> = {};
-    const attributeGroupIds: Record<string, Set<string>> = {};
-
-    for (const feature of features) {
-      for (const envid in feature.environmentSettings) {
-        const env = feature.environmentSettings?.[envid];
-        env?.rules?.forEach((rule) => {
-          try {
-            const parsedCondition = JSON.parse(rule?.condition ?? "{}");
-            recursiveWalk(parsedCondition, (node) => {
-              if (attributeKeys.includes(node[0])) {
-                if (!attributeFeatureIds[node[0]])
-                  attributeFeatureIds[node[0]] = new Set<string>();
-                attributeFeatureIds[node[0]].add(feature.id);
-              }
-            });
-          } catch (e) {
-            // ignore
-          }
-        });
-      }
-    }
-
-    for (const experiment of experiments) {
-      try {
-        const phase = experiment.phases?.[experiment.phases.length - 1];
-        const parsedCondition = JSON.parse(phase?.condition ?? "{}");
-        recursiveWalk(parsedCondition, (node) => {
-          if (attributeKeys.includes(node[0])) {
-            if (!attributeExperimentIds[node[0]])
-              attributeExperimentIds[node[0]] = new Set<string>();
-            attributeExperimentIds[node[0]].add(experiment.id);
-          }
-        });
-      } catch (e) {
-        // ignore
-      }
-    }
-
-    const conditionGroups = savedGroups.filter((g) => g.type === "condition");
-    for (const group of conditionGroups) {
-      try {
-        const parsedCondition = JSON.parse(group?.condition ?? "{}");
-        recursiveWalk(parsedCondition, (node) => {
-          if (attributeKeys.includes(node[0])) {
-            if (!attributeGroupIds[node[0]])
-              attributeGroupIds[node[0]] = new Set<string>();
-            attributeGroupIds[node[0]].add(group.id);
-          }
-        });
-      } catch (e) {
-        // ignore
-      }
-    }
+    const {
+      featureIds: attributeFeatureIds,
+      experimentIds: attributeExperimentIds,
+      groupIds: attributeGroupIds,
+    } = getAttributeReferences({
+      attributeKeys,
+      features,
+      experiments,
+      savedGroups,
+    });
 
     const attributeFeatures: Record<string, FeatureInterface[]> = {};
     const attributeExperiments: Record<
