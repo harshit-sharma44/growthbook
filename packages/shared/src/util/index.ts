@@ -66,6 +66,7 @@ export * from "./custom-fields";
 export * from "./holdouts";
 export * from "./experiment-cleanup";
 export * from "./experiment-links";
+export * from "./saved-views";
 export * from "./sortObjectKeys";
 export * from "./interleaving";
 export * from "./diffFormats";

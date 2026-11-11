@@ -98,6 +98,9 @@ export const MAX_SAVED_GROUP_DESCRIPTION_LENGTH = 100;
 export const MAX_EXPERIMENT_LINKS = 10;
 export const MAX_EXPERIMENT_LINK_LABEL_LENGTH = 60;
 export const MAX_EXPERIMENT_LINK_URL_LENGTH = 500;
+export const MAX_SAVED_VIEWS_PER_USER = 20;
+export const MAX_SAVED_VIEW_NAME_LENGTH = 50;
+export const MAX_SAVED_VIEW_QUERY_LENGTH = 500;
 export const FEATURE_KEY_PATTERN = "^[a-zA-Z0-9_.:\\|\\-]+$";
 export const FEATURE_KEY_PATTERN_ERROR =
   "Feature keys can only include letters, numbers, and the characters _, -, ., :, and |.";

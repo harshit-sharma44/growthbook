@@ -47,6 +47,7 @@ import { useUser } from "@/services/UserContext";
 import useSDKConnections from "@/hooks/useSDKConnections";
 import EmptyState from "@/components/EmptyState";
 import FeatureSearchFilters from "@/components/Search/FeatureSearchFilters";
+import SavedViewsMenu from "@/components/Features/SavedViewsMenu";
 import { useFeatureMetaInfo } from "@/hooks/useFeatureMetaInfo";
 import { useFeaturesStatus } from "@/hooks/useFeaturesStatus";
 import { useFeatureDraftStates } from "@/hooks/useFeatureDraftStates";
@@ -309,7 +310,7 @@ export default function FeaturesPage() {
       allFeatures.length > 0 && (
         <Box>
           <Box mb="2">
-            <Flex justify="between" mb="3" gap="3" align="center">
+            <Flex justify="between" mb="3" gap="3" align="center" wrap="wrap">
               <Flex align="center" gap="1" width="40%">
                 <Box flexGrow="1" style={{ position: "relative" }}>
                   <Field
@@ -324,13 +325,19 @@ export default function FeaturesPage() {
                   {searchLoading ? <LoadingSpinner /> : null}
                 </Box>
               </Flex>
-              <FeatureSearchFilters
-                features={allFeatures}
-                searchInputProps={searchInputProps}
-                setSearchValue={setSearchValue}
-                syntaxFilters={syntaxFilters}
-                hasArchived={hasArchived}
-              />
+              <Flex align="center" gap="5" ml="auto">
+                <FeatureSearchFilters
+                  features={allFeatures}
+                  searchInputProps={searchInputProps}
+                  setSearchValue={setSearchValue}
+                  syntaxFilters={syntaxFilters}
+                  hasArchived={hasArchived}
+                />
+                <SavedViewsMenu
+                  searchValue={searchInputProps.value}
+                  setSearchValue={setSearchValue}
+                />
+              </Flex>
             </Flex>
           </Box>
 
