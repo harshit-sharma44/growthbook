@@ -3,6 +3,9 @@ import {
   statsEngines,
   MAX_PRECOMPUTED_UNIT_DIMENSIONS,
   MAX_DESCRIPTION_LENGTH,
+  MAX_EXPERIMENT_LINKS,
+  MAX_EXPERIMENT_LINK_LABEL_LENGTH,
+  MAX_EXPERIMENT_LINK_URL_LENGTH,
 } from "shared/constants";
 import { REQUIRES_PERSON_NOTE } from "./event-user";
 import { FEATURE_LANDING_ACTIONS } from "./confirmations";
@@ -56,6 +59,27 @@ export const customMetricSlice = z.object({
   ),
 });
 export type CustomMetricSlice = z.infer<typeof customMetricSlice>;
+
+export const experimentLinkValidator = z
+  .object({
+    id: z.string(),
+    label: z.string().max(MAX_EXPERIMENT_LINK_LABEL_LENGTH),
+    url: z.string().max(MAX_EXPERIMENT_LINK_URL_LENGTH),
+  })
+  .strict();
+export type ExperimentLink = z.infer<typeof experimentLinkValidator>;
+
+// The full list is sent on every add, edit or delete; lengths, format and
+// duplicates are checked by `validateExperimentLinks` for the exact messages.
+export const experimentLinksInputValidator = z.array(
+  z
+    .object({
+      id: z.string().optional(),
+      label: z.string(),
+      url: z.string(),
+    })
+    .strict(),
+);
 
 const maxPrecomputedUnitDimensionsError = `A maximum of ${MAX_PRECOMPUTED_UNIT_DIMENSIONS} precomputed unit dimensions are allowed`;
 
@@ -584,6 +608,10 @@ export const experimentInterface = z
     tags: z.array(z.string()),
     description: z.string().max(MAX_DESCRIPTION_LENGTH).optional(),
     hypothesis: z.string().optional(),
+    links: z
+      .array(experimentLinkValidator)
+      .max(MAX_EXPERIMENT_LINKS)
+      .optional(),
     /** @deprecated related to HypGen */
     autoAssign: z.boolean(),
     previewURL: z.string(),

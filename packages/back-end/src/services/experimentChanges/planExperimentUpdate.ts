@@ -3,6 +3,7 @@ import { getValidDate } from "shared/dates";
 import {
   experimentHasLinkedChanges,
   includeExperimentInPayload,
+  validateExperimentLinks,
 } from "shared/util";
 import {
   experimentFieldValue,
@@ -18,6 +19,8 @@ import type {
 } from "shared/validators";
 import {
   CLUSTER_BANDIT_NOT_SUPPORTED_MESSAGE,
+  ExperimentLink,
+  experimentLinksInputValidator,
   isUnsupportedClusterBanditCombination,
 } from "shared/validators";
 import { getScopedSettings } from "shared/settings";
@@ -129,6 +132,7 @@ const UPDATABLE_KEYS: (keyof ExperimentInterface)[] = [
   "tags",
   "description",
   "hypothesis",
+  "links",
   "activationMetric",
   "segment",
   "queryFilter",
@@ -192,7 +196,29 @@ const DEEP_COMPARED_KEYS = new Set<keyof ExperimentInterface>([
   "customFields",
   "customMetricSlices",
   "precomputedUnitDimensionIds",
+  "links",
 ]);
+
+// Ids come from the client so edits are keyed by id; a missing or repeated one gets a new id.
+function parseExperimentLinksInput(raw: unknown): ExperimentLink[] {
+  const parsed = experimentLinksInputValidator.safeParse(raw);
+  if (!parsed.success) {
+    throw new BadRequestError(
+      "Links must be a list of objects with a label and a url.",
+    );
+  }
+  const seenIds = new Set<string>();
+  const withIds = parsed.data.map(({ id, label, url }) => {
+    const linkId = id && !seenIds.has(id) ? id : uuidv4();
+    seenIds.add(linkId);
+    return { id: linkId, label, url };
+  });
+  const result = validateExperimentLinks(withIds);
+  if (result.error !== null) {
+    throw new BadRequestError(result.error);
+  }
+  return result.links;
+}
 
 // Every gate an experiment update must pass, with no writes; `applyExperimentUpdatePlan` performs them.
 export async function planExperimentUpdate(
@@ -212,6 +238,10 @@ export async function planExperimentUpdate(
 
   if (!context.permissions.canUpdateExperiment(experiment, input)) {
     context.permissions.throwPermissionError();
+  }
+
+  if ("links" in data) {
+    data.links = parseExperimentLinksInput(data.links);
   }
 
   const attributeScope = lazyAttributeScope(() =>

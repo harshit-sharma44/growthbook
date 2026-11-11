@@ -171,6 +171,17 @@ const experimentSchema = new mongoose.Schema({
   // Observations is not used anymore, keeping here so it will continue being saved in Mongo if present
   observations: String,
   hypothesis: String,
+  links: {
+    type: [
+      {
+        _id: false,
+        id: String,
+        label: String,
+        url: String,
+      },
+    ],
+    default: undefined,
+  },
   pastNotifications: [String],
   metricOverrides: [
     {

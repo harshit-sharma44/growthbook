@@ -6,6 +6,7 @@ import Frame from "@/ui/Frame";
 import Link from "@/ui/Link";
 import HoldoutTimeline from "@/components/Experiment/holdout/HoldoutTimeline";
 import ExperimentTextField from "@/components/Experiment/TabbedPage/ExperimentTextField";
+import ExperimentLinks from "@/components/Experiment/TabbedPage/ExperimentLinks";
 import DeleteButton from "@/components/DeleteButton/DeleteButton";
 import { useAuth } from "@/services/auth";
 import { HoldoutSchedule } from "@/components/Holdout/HoldoutSchedule";
@@ -127,6 +128,13 @@ export default function SetupTabOverview({
         editable={isBandit && editInline}
         canEdit={canEditExperiment}
       />
+      {!isHoldout && (
+        <ExperimentLinks
+          experiment={experiment}
+          canEdit={canEditExperiment}
+          mutate={mutate}
+        />
+      )}
     </div>
   );
 }

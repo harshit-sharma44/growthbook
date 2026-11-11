@@ -111,6 +111,7 @@ import { EventForwarderConfigModel } from "back-end/src/models/EventForwarderCon
 import { PresentationThemeModel } from "back-end/src/models/PresentationThemeModel";
 import { WatchModel } from "back-end/src/models/WatchModel";
 import { FigmaConnectionModel } from "back-end/src/models/FigmaConnectionModel";
+import { SavedViewModel } from "back-end/src/models/SavedViewModel";
 import { SlackWorkspaceConnectionModel } from "back-end/src/models/SlackWorkspaceConnectionModel";
 import { SlackUserLinkModel } from "back-end/src/models/SlackUserLinkModel";
 import { SlackTaskClaimModel } from "back-end/src/models/SlackTaskClaimModel";
@@ -174,6 +175,7 @@ export type ModelName =
   | "revisions"
   | "watch"
   | "figmaConnections"
+  | "savedViews"
   | "slackWorkspaceConnections"
   | "slackUserLinks"
   | "slackTaskClaims"
@@ -242,6 +244,7 @@ export const modelClasses = {
   presentationThemes: PresentationThemeModel,
   watch: WatchModel,
   figmaConnections: FigmaConnectionModel,
+  savedViews: SavedViewModel,
   slackWorkspaceConnections: SlackWorkspaceConnectionModel,
   slackUserLinks: SlackUserLinkModel,
   slackTaskClaims: SlackTaskClaimModel,
@@ -434,6 +437,7 @@ export class ReqContextClass {
       presentationThemes: new PresentationThemeModel(this),
       watch: new WatchModel(this),
       figmaConnections: new FigmaConnectionModel(this),
+      savedViews: new SavedViewModel(this),
       slackWorkspaceConnections: new SlackWorkspaceConnectionModel(this),
       slackUserLinks: new SlackUserLinkModel(this),
       slackTaskClaims: new SlackTaskClaimModel(this),
