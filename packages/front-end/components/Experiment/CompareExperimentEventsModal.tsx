@@ -207,6 +207,7 @@ const EXPERIMENT_SECTION_KEYS: Record<
   name: "metadata",
   description: "metadata",
   hypothesis: "metadata",
+  links: "metadata",
   tags: "metadata",
   project: "metadata",
   status: "metadata",
