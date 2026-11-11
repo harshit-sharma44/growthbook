@@ -1,4 +1,9 @@
-import { dateStringArrayBetweenDates, getValidDate } from "../src/dates";
+import {
+  date,
+  dateStringArrayBetweenDates,
+  datetime,
+  getValidDate,
+} from "../src/dates";
 
 describe("getValidDate", () => {
   it("Uses the fallback", () => {
@@ -57,5 +62,27 @@ describe("dateStringArrayBetweenDates", () => {
       "'2020-01-05'",
       "'2020-01-07'",
     ]);
+  });
+});
+
+describe("date and datetime with a time zone", () => {
+  // 8:00 PM UTC on Aug 27 is already Aug 28 (1:30 AM) in India (UTC+5:30)
+  const phaseStart = "2025-08-27T20:00:00.000Z";
+
+  it("formats in UTC regardless of the viewer's local time zone", () => {
+    expect(date(phaseStart, "UTC")).toEqual("Aug 27, 2025");
+    expect(datetime(phaseStart, "UTC")).toEqual("Aug 27, 2025, 8:00 PM");
+  });
+
+  it("formats in the requested time zone", () => {
+    expect(date(phaseStart, "Asia/Kolkata")).toEqual("Aug 28, 2025");
+    expect(datetime(phaseStart, "Asia/Kolkata")).toEqual(
+      "Aug 28, 2025, 1:30 AM"
+    );
+  });
+
+  it("returns an empty string for an empty date", () => {
+    expect(date("", "UTC")).toEqual("");
+    expect(datetime("", "UTC")).toEqual("");
   });
 });
