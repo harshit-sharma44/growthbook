@@ -20,6 +20,10 @@ const StopExperimentForm: FC<{
   close: () => void;
 }> = ({ experiment, close, mutate }) => {
   const isStopped = experiment.status === "stopped";
+  // An experiment with linked Feature Flags, Visual Changes or URL Redirects
+  // stops serving the moment this form is submitted, so a custom stop time
+  // can't be honored. Only unlinked experiments can record a different one.
+  const hasLinkedChanges = experimentHasLinkedChanges(experiment);
 
   const form = useForm({
     defaultValues: {
@@ -47,9 +51,12 @@ const StopExperimentForm: FC<{
       }
     }
 
+    const { dateEnded, ...rest } = value;
     const body = {
-      ...value,
+      ...rest,
       winner,
+      // Leave it out for linked experiments so the server stops it now
+      ...(hasLinkedChanges ? {} : { dateEnded }),
     };
 
     await apiCall<{ status: number; message?: string }>(
@@ -89,11 +96,13 @@ const StopExperimentForm: FC<{
             {...form.register("reason")}
             placeholder="(optional)"
           />
-          <Field
-            label="Stop Time (UTC)"
-            type="datetime-local"
-            {...form.register("dateEnded")}
-          />
+          {!hasLinkedChanges && (
+            <Field
+              label="Stop Time (UTC)"
+              type="datetime-local"
+              {...form.register("dateEnded")}
+            />
+          )}
         </>
       )}
       <div className="row">
@@ -154,7 +163,7 @@ const StopExperimentForm: FC<{
           />
         )}
       </div>
-      {experimentHasLinkedChanges(experiment) && (
+      {hasLinkedChanges && (
         <>
           <div className="row">
             <div className="form-group col">
